@@ -1,28 +1,30 @@
 from __future__ import print_function
-
-import json
+ 
+import socket
 import subprocess
 import sys
-
+ 
 def file_tool(path):
     return subprocess.check_output(['file', path]).strip()
-
-def main(f):
+    
+def main(path):
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
-        result = json.loads(subprocess.check_output(["sf", "-json", f]))
-    except subprocess.CalledProcessError as e:
-        print("Siegfried exited {} and no format was found.".format(e.returncode), file=sys.stderr)
-        return 1
-
-    match = result['files'][0]
-    if len(match['matches']) == 0 or match['matches'][0]['puid'] == 'UNKNOWN':
-        if "text" in file_tool(f):
-            print("x-fmt/111")
-        else:
-            print("Siegfried exited 0 but no format was found.", file=sys.stderr)
+        sock.connect('/tmp/siegfried')
+        sock.sendall(path)
+        reply = sock.recv(1024)
+        if reply.startswith('e'):
+            if reply.startswith('error: format unknown'):
+                if "text" in file_tool(path):
+                    print("x-fmt/111")
+                    return 0
+            print("Siegfried sent {}.".format(reply), file=sys.stderr)
             return 1
-    else:
-        print(match['matches'][0]['puid'])
-
+        else:
+            print(reply)
+    except socket.error, msg:
+        print("Siegfried connection failed {}".format(msg), file=sys.stderr)
+        return 1
+ 
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1]))
